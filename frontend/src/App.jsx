@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:5000/api/interviews";
+const API_URL = "https://interviewease1-1.onrender.com/api/interviews";
 
 function App() {
   const [interviews, setInterviews] = useState([]);
@@ -11,19 +11,13 @@ function App() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
-  // =====================================================
   // SEARCH & FILTER
-  // =====================================================
-
   const [searchText, setSearchText] = useState("");
   const [companyFilter, setCompanyFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
   const [typeFilter, setTypeFilter] = useState("All");
 
-  // =====================================================
   // FORM
-  // =====================================================
-
   const [formData, setFormData] = useState({
     companyName: "",
     candidateName: "",
@@ -37,10 +31,7 @@ function App() {
     status: "Scheduled"
   });
 
-  // =====================================================
   // FETCH INTERVIEWS
-  // =====================================================
-
   const fetchInterviews = async () => {
     try {
       setLoading(true);
@@ -76,10 +67,7 @@ function App() {
     fetchInterviews();
   }, []);
 
-  // =====================================================
   // DATE FORMAT
-  // =====================================================
-
   const formatDate = (date) => {
     if (!date) return "-";
 
@@ -92,10 +80,7 @@ function App() {
     return d.toLocaleDateString("en-GB");
   };
 
-  // =====================================================
   // TIME FORMAT
-  // =====================================================
-
   const formatTime = (time) => {
     if (!time) return "-";
 
@@ -127,10 +112,7 @@ function App() {
     return `${String(hour).padStart(2, "0")}:${minute} ${period}`;
   };
 
-  // =====================================================
   // FORM CHANGE
-  // =====================================================
-
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -140,10 +122,7 @@ function App() {
     }));
   };
 
-  // =====================================================
   // ADD MODAL
-  // =====================================================
-
   const openAddModal = () => {
     setEditingId(null);
 
@@ -163,10 +142,7 @@ function App() {
     setShowModal(true);
   };
 
-  // =====================================================
   // EDIT MODAL
-  // =====================================================
-
   const openEditModal = (interview) => {
     setEditingId(interview._id);
 
@@ -243,10 +219,7 @@ function App() {
     setShowModal(true);
   };
 
-  // =====================================================
   // SAVE INTERVIEW
-  // =====================================================
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -291,34 +264,18 @@ function App() {
         `${String(hour).padStart(2, "0")}:${minute}`;
 
       const dataToSend = {
-        companyName:
-          formData.companyName,
-
-        candidateName:
-          formData.candidateName,
-
-        candidateEmail:
-          formData.candidateEmail,
-
-        interviewerName:
-          formData.interviewerName,
-
-        interviewDate:
-          formData.interviewDate,
-
-        interviewTime:
-          finalTime,
-
-        interviewType:
-          formData.interviewType,
-
+        companyName: formData.companyName,
+        candidateName: formData.candidateName,
+        candidateEmail: formData.candidateEmail,
+        interviewerName: formData.interviewerName,
+        interviewDate: formData.interviewDate,
+        interviewTime: finalTime,
+        interviewType: formData.interviewType,
         meetingLink:
           formData.interviewType === "Online"
             ? formData.meetingLink
             : "",
-
-        status:
-          formData.status
+        status: formData.status
       };
 
       const url = editingId
@@ -331,11 +288,9 @@ function App() {
 
       const response = await fetch(url, {
         method,
-
         headers: {
           "Content-Type": "application/json"
         },
-
         body: JSON.stringify(dataToSend)
       });
 
@@ -371,10 +326,7 @@ function App() {
     }
   };
 
-  // =====================================================
   // DELETE
-  // =====================================================
-
   const deleteInterview = async (id) => {
     const confirmDelete =
       window.confirm(
@@ -419,10 +371,7 @@ function App() {
     }
   };
 
-  // =====================================================
   // COMPANY LIST
-  // =====================================================
-
   const companies = useMemo(() => {
     const uniqueCompanies = interviews
       .map(
@@ -440,10 +389,7 @@ function App() {
     ].sort();
   }, [interviews]);
 
-  // =====================================================
   // FILTERED INTERVIEWS
-  // =====================================================
-
   const filteredInterviews = useMemo(() => {
     const search =
       searchText
@@ -499,10 +445,7 @@ function App() {
     typeFilter
   ]);
 
-  // =====================================================
   // COMPANY DASHBOARD
-  // =====================================================
-
   const dashboardInterviews =
     useMemo(() => {
 
@@ -551,10 +494,7 @@ function App() {
         )
       : 0;
 
-  // =====================================================
   // UPCOMING COUNT
-  // =====================================================
-
   const today = new Date();
 
   today.setHours(
@@ -593,10 +533,7 @@ function App() {
       }
     ).length;
 
-  // =====================================================
   // NEXT INTERVIEW
-  // =====================================================
-
   const nextInterview =
     useMemo(() => {
 
@@ -670,10 +607,7 @@ function App() {
       companyFilter
     ]);
 
-  // =====================================================
   // JOIN
-  // =====================================================
-
   const joinInterview =
     (interview) => {
 
@@ -708,33 +642,19 @@ function App() {
       );
     };
 
-  // =====================================================
   // CLEAR FILTERS
-  // =====================================================
-
   const clearFilters = () => {
-
     setSearchText("");
     setCompanyFilter("All");
     setStatusFilter("All");
     setTypeFilter("All");
-
   };
 
-  // =====================================================
   // CLOSE MODAL
-  // =====================================================
-
   const closeModal = () => {
-
     setShowModal(false);
     setEditingId(null);
-
   };
-
-  // =====================================================
-  // UI
-  // =====================================================
 
   return (
     <div className="app">
@@ -774,9 +694,7 @@ function App() {
 
       <main className="container">
 
-        {/* =================================================
-            DASHBOARD TITLE
-        ================================================= */}
+        {/* DASHBOARD TITLE */}
 
         <div className="dashboard-heading">
 
@@ -799,6 +717,7 @@ function App() {
             <div className="selected-company">
 
               🏢{" "}
+
               <strong>
                 {companyFilter}
               </strong>
@@ -809,13 +728,9 @@ function App() {
 
         </div>
 
-        {/* =================================================
-            DASHBOARD STATS
-        ================================================= */}
+        {/* DASHBOARD STATS */}
 
         <section className="stats">
-
-          {/* TOTAL */}
 
           <div className="stat-card">
 
@@ -837,8 +752,6 @@ function App() {
 
           </div>
 
-          {/* UPCOMING */}
-
           <div className="stat-card">
 
             <div className="stat-icon scheduled">
@@ -858,8 +771,6 @@ function App() {
             </div>
 
           </div>
-
-          {/* COMPLETED */}
 
           <div className="stat-card">
 
@@ -881,8 +792,6 @@ function App() {
 
           </div>
 
-          {/* CANCELLED */}
-
           <div className="stat-card">
 
             <div className="stat-icon cancelled">
@@ -902,8 +811,6 @@ function App() {
             </div>
 
           </div>
-
-          {/* COMPLETION RATE */}
 
           <div className="stat-card">
 
@@ -927,9 +834,7 @@ function App() {
 
         </section>
 
-        {/* =================================================
-            COMPANY SUMMARY
-        ================================================= */}
+        {/* COMPANY SUMMARY */}
 
         {companyFilter !== "All" && (
 
@@ -1011,9 +916,7 @@ function App() {
 
         )}
 
-        {/* =================================================
-            NEXT UPCOMING INTERVIEW
-        ================================================= */}
+        {/* NEXT UPCOMING INTERVIEW */}
 
         {nextInterview && (
 
@@ -1107,9 +1010,7 @@ function App() {
 
         )}
 
-        {/* =================================================
-            INTERVIEWS
-        ================================================= */}
+        {/* INTERVIEWS */}
 
         <section className="interviews-section">
 
@@ -1143,8 +1044,6 @@ function App() {
 
           <div className="filters">
 
-            {/* SEARCH */}
-
             <div className="search-box">
 
               <span>
@@ -1163,8 +1062,6 @@ function App() {
               />
 
             </div>
-
-            {/* COMPANY */}
 
             <select
               value={companyFilter}
@@ -1194,8 +1091,6 @@ function App() {
 
             </select>
 
-            {/* STATUS */}
-
             <select
               value={statusFilter}
               onChange={(e) =>
@@ -1223,8 +1118,6 @@ function App() {
 
             </select>
 
-            {/* TYPE */}
-
             <select
               value={typeFilter}
               onChange={(e) =>
@@ -1247,8 +1140,6 @@ function App() {
               </option>
 
             </select>
-
-            {/* CLEAR */}
 
             <button
               className="clear-btn"
@@ -1431,7 +1322,7 @@ function App() {
 
                             <span
                               className={`status-badge ${
-                                interview.status.toLowerCase()
+                                interview.status?.toLowerCase()
                               }`}
                             >
                               {
@@ -1517,6 +1408,7 @@ function App() {
                 {interviews.length === 0 ? (
 
                   <>
+
                     <h3>
                       No interviews found
                     </h3>
@@ -1526,11 +1418,13 @@ function App() {
                       to create your first
                       interview.
                     </p>
+
                   </>
 
                 ) : (
 
                   <>
+
                     <h3>
                       No matching interviews
                     </h3>
@@ -1548,6 +1442,7 @@ function App() {
                     >
                       Clear Filters
                     </button>
+
                   </>
 
                 )}
@@ -1560,9 +1455,7 @@ function App() {
 
       </main>
 
-      {/* =================================================
-          MODAL
-      ================================================= */}
+      {/* MODAL */}
 
       {showModal && (
 
@@ -1612,8 +1505,6 @@ function App() {
 
               <div className="form-grid">
 
-                {/* COMPANY */}
-
                 <div className="form-group full">
 
                   <label>
@@ -1635,8 +1526,6 @@ function App() {
 
                 </div>
 
-                {/* CANDIDATE */}
-
                 <div className="form-group">
 
                   <label>
@@ -1656,8 +1545,6 @@ function App() {
                   />
 
                 </div>
-
-                {/* EMAIL */}
 
                 <div className="form-group">
 
@@ -1679,8 +1566,6 @@ function App() {
 
                 </div>
 
-                {/* INTERVIEWER */}
-
                 <div className="form-group">
 
                   <label>
@@ -1701,8 +1586,6 @@ function App() {
 
                 </div>
 
-                {/* DATE */}
-
                 <div className="form-group">
 
                   <label>
@@ -1722,8 +1605,6 @@ function App() {
                   />
 
                 </div>
-
-                {/* TIME */}
 
                 <div className="form-group">
 
@@ -1769,8 +1650,6 @@ function App() {
 
                 </div>
 
-                {/* TYPE */}
-
                 <div className="form-group">
 
                   <label>
@@ -1799,8 +1678,6 @@ function App() {
 
                 </div>
 
-                {/* MEETING LINK */}
-
                 {formData.interviewType ===
                   "Online" && (
 
@@ -1825,8 +1702,6 @@ function App() {
                   </div>
 
                 )}
-
-                {/* STATUS */}
 
                 <div className="form-group">
 
