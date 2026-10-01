@@ -5,11 +5,43 @@ const router = express.Router();
 const Interview = require("../models/Interview");
 
 // =====================================================
+// AUTO UPDATE COMPLETED INTERVIEWS
+// =====================================================
+
+async function updateCompletedInterviews() {
+  try {
+    const now = new Date();
+
+    await Interview.updateMany(
+      {
+        status: "Scheduled",
+        interviewDate: { $lt: now }
+      },
+      {
+        $set: {
+          status: "Completed"
+        }
+      }
+    );
+  } catch (error) {
+    console.error(
+      "AUTO STATUS UPDATE ERROR:",
+      error.message
+    );
+  }
+}
+
+// =====================================================
 // GET ALL INTERVIEWS
 // =====================================================
 
 router.get("/", async (req, res) => {
   try {
+
+    // Automatically change past interviews
+    // from Scheduled → Completed
+    await updateCompletedInterviews();
+
     const interviews = await Interview
       .find()
       .sort({
@@ -23,13 +55,15 @@ router.get("/", async (req, res) => {
 
   } catch (error) {
 
-    console.error("GET ALL ERROR:", error);
+    console.error(
+      "GET ALL ERROR:",
+      error
+    );
 
     res.status(500).json({
       success: false,
       message: error.message
     });
-
   }
 });
 
@@ -40,16 +74,18 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
 
+    await updateCompletedInterviews();
+
     const interview =
-      await Interview.findById(req.params.id);
+      await Interview.findById(
+        req.params.id
+      );
 
     if (!interview) {
-
       return res.status(404).json({
         success: false,
         message: "Interview not found"
       });
-
     }
 
     res.json({
@@ -59,13 +95,15 @@ router.get("/:id", async (req, res) => {
 
   } catch (error) {
 
-    console.error("GET SINGLE ERROR:", error);
+    console.error(
+      "GET SINGLE ERROR:",
+      error
+    );
 
     res.status(500).json({
       success: false,
       message: error.message
     });
-
   }
 });
 
@@ -76,42 +114,42 @@ router.get("/:id", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
 
-    const interview = new Interview({
+    const interview =
+      new Interview({
 
-      companyName:
-        req.body.companyName,
+        companyName:
+          req.body.companyName,
 
-      candidateName:
-        req.body.candidateName,
+        candidateName:
+          req.body.candidateName,
 
-      candidateEmail:
-        req.body.candidateEmail,
+        candidateEmail:
+          req.body.candidateEmail,
 
-      interviewerName:
-        req.body.interviewerName,
+        interviewerName:
+          req.body.interviewerName,
 
-      interviewDate:
-        req.body.interviewDate,
+        interviewDate:
+          req.body.interviewDate,
 
-      interviewTime:
-        req.body.interviewTime,
+        interviewTime:
+          req.body.interviewTime,
 
-      interviewType:
-        req.body.interviewType,
+        interviewType:
+          req.body.interviewType,
 
-      meetingLink:
-        req.body.meetingLink,
+        meetingLink:
+          req.body.meetingLink,
 
-      status:
-        req.body.status || "Scheduled"
-
-    });
+        status:
+          req.body.status ||
+          "Scheduled"
+      });
 
     const savedInterview =
       await interview.save();
 
     res.status(201).json({
-
       success: true,
 
       message:
@@ -119,21 +157,19 @@ router.post("/", async (req, res) => {
 
       data:
         savedInterview
-
     });
 
   } catch (error) {
 
-    console.error("CREATE ERROR:", error);
+    console.error(
+      "CREATE ERROR:",
+      error
+    );
 
     res.status(500).json({
-
       success: false,
-
       message: error.message
-
     });
-
   }
 });
 
@@ -145,19 +181,33 @@ router.put("/:id", async (req, res) => {
   try {
 
     console.log("");
-    console.log("================================");
-    console.log("UPDATE REQUEST");
-    console.log("ID:", req.params.id);
-    console.log("DATA:", req.body);
-    console.log("================================");
+    console.log(
+      "================================"
+    );
+
+    console.log(
+      "UPDATE REQUEST"
+    );
+
+    console.log(
+      "ID:",
+      req.params.id
+    );
+
+    console.log(
+      "DATA:",
+      req.body
+    );
+
+    console.log(
+      "================================"
+    );
 
     const updatedInterview =
       await Interview.findByIdAndUpdate(
-
         req.params.id,
 
         {
-
           companyName:
             req.body.companyName,
 
@@ -183,28 +233,23 @@ router.put("/:id", async (req, res) => {
             req.body.meetingLink,
 
           status:
-            req.body.status || "Scheduled"
-
+            req.body.status ||
+            "Scheduled"
         },
 
         {
           new: true,
           runValidators: true
         }
-
       );
 
     if (!updatedInterview) {
 
       return res.status(404).json({
-
         success: false,
-
         message:
           "Interview not found"
-
       });
-
     }
 
     console.log(
@@ -213,7 +258,6 @@ router.put("/:id", async (req, res) => {
     );
 
     res.json({
-
       success: true,
 
       message:
@@ -221,7 +265,6 @@ router.put("/:id", async (req, res) => {
 
       data:
         updatedInterview
-
     });
 
   } catch (error) {
@@ -232,14 +275,10 @@ router.put("/:id", async (req, res) => {
     );
 
     res.status(500).json({
-
       success: false,
-
       message:
         error.message
-
     });
-
   }
 });
 
@@ -258,23 +297,17 @@ router.delete("/:id", async (req, res) => {
     if (!deletedInterview) {
 
       return res.status(404).json({
-
         success: false,
-
         message:
           "Interview not found"
-
       });
-
     }
 
     res.json({
-
       success: true,
 
       message:
         "Interview deleted successfully"
-
     });
 
   } catch (error) {
@@ -285,15 +318,15 @@ router.delete("/:id", async (req, res) => {
     );
 
     res.status(500).json({
-
       success: false,
-
       message:
         error.message
-
     });
-
   }
 });
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 module.exports = router;
