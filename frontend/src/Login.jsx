@@ -4,10 +4,26 @@ import React, {
 
 import "./Login.css";
 
+// =====================================================
+// API URL
+// =====================================================
+
 const API_URL =
-  "http://localhost:5000/api/auth";
+  import.meta.env.VITE_API_URL ||
+  "https://interviewease1-1.onrender.com/api/interviews";
+// Convert interview API URL to auth API URL
+const AUTH_API_URL =
+  API_URL.replace(
+    "/api/interviews",
+    "/api/auth"
+  );
+
+// =====================================================
+// LOGIN
+// =====================================================
 
 function Login({ onLogin }) {
+
   const [email, setEmail] =
     useState("");
 
@@ -20,88 +36,162 @@ function Login({ onLogin }) {
   const [error, setError] =
     useState("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
 
-    setError("");
-    setLoading(true);
+  // ===================================================
+  // HANDLE LOGIN
+  // ===================================================
 
-    try {
-      const response =
-        await fetch(
-          `${API_URL}/login`,
-          {
-            method: "POST",
+  const handleSubmit =
+    async (e) => {
 
-            headers: {
-              "Content-Type":
-                "application/json"
-            },
+      e.preventDefault();
 
-            body: JSON.stringify({
-              email,
-              password
-            })
-          }
+      setError("");
+      setLoading(true);
+
+      try {
+
+        const response =
+          await fetch(
+            `${AUTH_API_URL}/login`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json"
+              },
+
+              body:
+                JSON.stringify({
+                  email:
+                    email.trim(),
+
+                  password
+                })
+            }
+          );
+
+
+        let data = {};
+
+        try {
+          data =
+            await response.json();
+        } catch {
+          data = {};
+        }
+
+
+        if (!response.ok) {
+
+          throw new Error(
+            data.message ||
+            "Login failed"
+          );
+        }
+
+
+        // ===============================================
+        // SAVE TOKEN
+        // ===============================================
+
+        localStorage.setItem(
+          "interviewEaseToken",
+          data.token
         );
 
-      const data =
-        await response.json();
 
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-          "Login failed"
+        // ===============================================
+        // SAVE USER
+        // ===============================================
+
+        localStorage.setItem(
+          "interviewEaseUser",
+          JSON.stringify(
+            data.user
+          )
         );
+
+
+        // ===============================================
+        // LOGIN SUCCESS
+        // ===============================================
+
+        onLogin();
+
+      } catch (err) {
+
+        console.error(
+          "LOGIN ERROR:",
+          err
+        );
+
+
+        // Browser/network error
+        if (
+          err instanceof TypeError
+        ) {
+
+          setError(
+            "Unable to connect to server. Please try again."
+          );
+
+        } else {
+
+          setError(
+            err.message ||
+            "Login failed"
+          );
+        }
+
+      } finally {
+
+        setLoading(false);
       }
+    };
 
-      localStorage.setItem(
-        "interviewEaseToken",
-        data.token
-      );
 
-      localStorage.setItem(
-        "interviewEaseUser",
-        JSON.stringify(
-          data.user
-        )
-      );
-
-      onLogin();
-
-    } catch (err) {
-      console.error(
-        "LOGIN ERROR:",
-        err
-      );
-
-      setError(
-        err.message ||
-        "Unable to connect to server"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ===================================================
+  // UI
+  // ===================================================
 
   return (
+
     <div className="login-page">
 
       <div className="login-card">
+
+
+        {/* =================================================
+            LOGO
+        ================================================= */}
 
         <div className="login-logo">
           🎯
         </div>
 
+
+        {/* =================================================
+            TITLE
+        ================================================= */}
+
         <h1>
           InterviewEase
         </h1>
+
 
         <p className="login-subtitle">
           Interview Scheduling System
         </p>
 
+
+        {/* =================================================
+            HEADING
+        ================================================= */}
+
         <div className="login-heading">
+
           <h2>
             Welcome Back
           </h2>
@@ -109,11 +199,24 @@ function Login({ onLogin }) {
           <p>
             Sign in to manage your interviews
           </p>
+
         </div>
 
+
+        {/* =================================================
+            FORM
+        ================================================= */}
+
         <form
-          onSubmit={handleSubmit}
+          onSubmit={
+            handleSubmit
+          }
         >
+
+
+          {/* =================================================
+              EMAIL
+          ================================================= */}
 
           <div className="login-field">
 
@@ -131,9 +234,15 @@ function Login({ onLogin }) {
                 )
               }
               required
+              autoComplete="email"
             />
 
           </div>
+
+
+          {/* =================================================
+              PASSWORD
+          ================================================= */}
 
           <div className="login-field">
 
@@ -151,31 +260,53 @@ function Login({ onLogin }) {
                 )
               }
               required
+              autoComplete="current-password"
             />
 
           </div>
 
+
+          {/* =================================================
+              ERROR
+          ================================================= */}
+
           {error && (
+
             <div className="login-error">
               ⚠️ {error}
             </div>
+
           )}
+
+
+          {/* =================================================
+              LOGIN BUTTON
+          ================================================= */}
 
           <button
             type="submit"
             className="login-btn"
             disabled={loading}
           >
+
             {loading
               ? "Signing In..."
               : "Sign In →"}
+
           </button>
 
+
         </form>
+
+
+        {/* =================================================
+            FOOTER
+        ================================================= */}
 
         <div className="login-footer">
           🔒 Secure Admin Login
         </div>
+
 
       </div>
 

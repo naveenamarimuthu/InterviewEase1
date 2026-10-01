@@ -13,8 +13,7 @@ import Login from "./Login";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api/interviews";
-
+  "https://interviewease1-1.onrender.com/api/interviews";
 // =====================================================
 // EMPTY FORM
 // =====================================================
