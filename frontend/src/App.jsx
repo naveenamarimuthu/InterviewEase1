@@ -1,539 +1,1017 @@
-import { useEffect, useMemo, useState } from "react";
-import "./App.css";
+import React, {
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 
-const API_URL = "https://interviewease1-1.onrender.com/api/interviews";
+import "./App.css";
+import Login from "./Login";
+
+// =====================================================
+// API URL
+// =====================================================
+
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000/api/interviews";
+
+// =====================================================
+// EMPTY FORM
+// =====================================================
+
+const emptyForm = {
+  companyName: "",
+  candidateName: "",
+  candidateEmail: "",
+  interviewerName: "",
+  interviewDate: "",
+  interviewTime: "",
+  interviewType: "Online",
+  meetingLink: ""
+};
+
+// =====================================================
+// FORMAT TIME
+// =====================================================
+
+function formatTime(timeValue) {
+  if (!timeValue) {
+    return "-";
+  }
+
+  const value = String(timeValue)
+    .trim()
+    .toUpperCase();
+
+  // Already AM / PM
+  if (
+    value.includes("AM") ||
+    value.includes("PM")
+  ) {
+    return value;
+  }
+
+  const parts = value.split(":");
+
+  if (parts.length < 2) {
+    return value;
+  }
+
+  let hours = parseInt(parts[0], 10);
+
+  const minutes = String(parts[1])
+    .padStart(2, "0");
+
+  if (Number.isNaN(hours)) {
+    return value;
+  }
+
+  const period =
+    hours >= 12 ? "PM" : "AM";
+
+  hours = hours % 12;
+
+  if (hours === 0) {
+    hours = 12;
+  }
+
+  return `${String(hours).padStart(
+    2,
+    "0"
+  )}:${minutes} ${period}`;
+}
+
+// =====================================================
+// FORMAT DATE
+// =====================================================
+
+function formatDate(dateValue) {
+  if (!dateValue) {
+    return "-";
+  }
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return date.toLocaleDateString(
+    "en-IN",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric"
+    }
+  );
+}
+
+// =====================================================
+// GET INTERVIEW DATE TIME
+// =====================================================
+
+function getInterviewDateTime(interview) {
+  if (
+    !interview ||
+    !interview.interviewDate ||
+    !interview.interviewTime
+  ) {
+    return null;
+  }
+
+  const date = new Date(
+    interview.interviewDate
+  );
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const year =
+    date.getUTCFullYear();
+
+  const month =
+    date.getUTCMonth();
+
+  const day =
+    date.getUTCDate();
+
+  let time = String(
+    interview.interviewTime
+  )
+    .trim()
+    .toUpperCase();
+
+  let hours = 0;
+  let minutes = 0;
+
+  // ---------------------------------------------
+  // AM / PM
+  // ---------------------------------------------
+
+  if (
+    time.includes("AM") ||
+    time.includes("PM")
+  ) {
+    const parts =
+      time.split(/\s+/);
+
+    const timePart =
+      parts[0];
+
+    const period =
+      parts[1];
+
+    const timeValues =
+      timePart.split(":");
+
+    hours =
+      parseInt(
+        timeValues[0],
+        10
+      );
+
+    minutes =
+      parseInt(
+        timeValues[1],
+        10
+      );
+
+    if (
+      period === "PM" &&
+      hours !== 12
+    ) {
+      hours += 12;
+    }
+
+    if (
+      period === "AM" &&
+      hours === 12
+    ) {
+      hours = 0;
+    }
+  }
+
+  // ---------------------------------------------
+  // 24 HOURS
+  // ---------------------------------------------
+
+  else {
+    const timeValues =
+      time.split(":");
+
+    hours =
+      parseInt(
+        timeValues[0],
+        10
+      );
+
+    minutes =
+      parseInt(
+        timeValues[1],
+        10
+      );
+  }
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes)
+  ) {
+    return null;
+  }
+
+  // Backend stores interview time as IST.
+  // Convert IST to UTC.
+  return new Date(
+    Date.UTC(
+      year,
+      month,
+      day,
+      hours - 5,
+      minutes - 30
+    )
+  );
+}
+
+// =====================================================
+// GET LIVE STATUS
+// =====================================================
+
+function getLiveStatus(interview) {
+  if (!interview) {
+    return "Scheduled";
+  }
+
+  if (
+    interview.status ===
+    "Cancelled"
+  ) {
+    return "Cancelled";
+  }
+
+  if (
+    interview.status ===
+    "Completed"
+  ) {
+    return "Completed";
+  }
+
+  const interviewDateTime =
+    getInterviewDateTime(
+      interview
+    );
+
+  if (
+    interviewDateTime &&
+    interviewDateTime <= new Date()
+  ) {
+    return "Completed";
+  }
+
+  return "Scheduled";
+}
+
+// =====================================================
+// APP
+// =====================================================
 
 function App() {
-  const [interviews, setInterviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  // ===================================================
+  // LOGIN
+  // ===================================================
 
-  // SEARCH & FILTER
-  const [searchText, setSearchText] = useState("");
-  const [companyFilter, setCompanyFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
-  const [typeFilter, setTypeFilter] = useState("All");
+  const [isLoggedIn, setIsLoggedIn] =
+    useState(
+      !!localStorage.getItem(
+        "interviewEaseToken"
+      )
+    );
 
+  // ===================================================
+  // DATA
+  // ===================================================
+
+  const [interviews, setInterviews] =
+    useState([]);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  // ===================================================
+  // MODAL
+  // ===================================================
+
+  const [showModal, setShowModal] =
+    useState(false);
+
+  const [editingInterview, setEditingInterview] =
+    useState(null);
+
+  // ===================================================
   // FORM
-  const [formData, setFormData] = useState({
-    companyName: "",
-    candidateName: "",
-    candidateEmail: "",
-    interviewerName: "",
-    interviewDate: "",
-    interviewTime: "",
-    timePeriod: "AM",
-    interviewType: "Online",
-    meetingLink: "",
-    status: "Scheduled"
-  });
+  // ===================================================
 
-  // FETCH INTERVIEWS
-  const fetchInterviews = async () => {
-    try {
-      setLoading(true);
-      setError("");
+  const [form, setForm] =
+    useState(emptyForm);
 
-      const response = await fetch(API_URL);
+  // ===================================================
+  // FILTERS
+  // ===================================================
 
-      if (!response.ok) {
-        throw new Error("Unable to connect to backend");
-      }
+  const [search, setSearch] =
+    useState("");
 
-      const result = await response.json();
+  const [companyFilter, setCompanyFilter] =
+    useState("");
 
-      if (result.success) {
-        setInterviews(result.data || []);
-      } else {
-        throw new Error(
-          result.message || "Unable to load interviews"
-        );
-      }
-    } catch (err) {
-      console.error(err);
+  const [statusFilter, setStatusFilter] =
+    useState("All");
 
-      setError(
-        err.message || "Failed to fetch interviews"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [typeFilter, setTypeFilter] =
+    useState("All");
+
+  // ===================================================
+  // CURRENT TIME
+  // ===================================================
+
+  const [, setCurrentTime] =
+    useState(new Date());
+
+  // ===================================================
+  // LIVE CLOCK
+  // ===================================================
 
   useEffect(() => {
-    fetchInterviews();
+    const timer =
+      setInterval(() => {
+        setCurrentTime(
+          new Date()
+        );
+      }, 1000);
+
+    return () =>
+      clearInterval(timer);
   }, []);
 
-  // DATE FORMAT
-  const formatDate = (date) => {
-    if (!date) return "-";
+  // ===================================================
+  // FETCH INTERVIEWS
+  // ===================================================
 
-    const d = new Date(date);
+  const fetchInterviews =
+    async () => {
 
-    if (Number.isNaN(d.getTime())) {
-      return date;
+      try {
+        setLoading(true);
+
+        const token =
+          localStorage.getItem(
+            "interviewEaseToken"
+          );
+
+        if (!token) {
+          setIsLoggedIn(false);
+          return;
+        }
+
+        const response =
+          await fetch(API_URL, {
+            headers: {
+              Authorization:
+                `Bearer ${token}`
+            }
+          });
+
+        if (
+          response.status === 401
+        ) {
+          localStorage.removeItem(
+            "interviewEaseToken"
+          );
+
+          localStorage.removeItem(
+            "interviewEaseUser"
+          );
+
+          setIsLoggedIn(false);
+
+          return;
+        }
+
+        const data =
+          await response.json();
+
+        if (data.success) {
+          setInterviews(
+            data.data || []
+          );
+        } else {
+          console.error(
+            data.message
+          );
+        }
+
+      } catch (error) {
+        console.error(
+          "FETCH ERROR:",
+          error
+        );
+
+      } finally {
+        setLoading(false);
+      }
+    };
+
+  // ===================================================
+  // FETCH WHEN LOGIN
+  // ===================================================
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchInterviews();
     }
+  }, [isLoggedIn]);
 
-    return d.toLocaleDateString("en-GB");
+  // ===================================================
+  // LOGIN
+  // ===================================================
+
+  const handleLogin = () => {
+    setIsLoggedIn(true);
   };
 
-  // TIME FORMAT
-  const formatTime = (time) => {
-    if (!time) return "-";
+  // ===================================================
+  // LOGOUT
+  // ===================================================
 
-    if (/AM|PM/i.test(time)) {
-      return time;
-    }
+  const handleLogout = () => {
 
-    const parts = time.split(":");
+    localStorage.removeItem(
+      "interviewEaseToken"
+    );
 
-    if (parts.length < 2) {
-      return time;
-    }
+    localStorage.removeItem(
+      "interviewEaseUser"
+    );
 
-    let hour = parseInt(parts[0], 10);
-    const minute = parts[1];
+    setInterviews([]);
 
-    if (Number.isNaN(hour)) {
-      return time;
-    }
-
-    const period = hour >= 12 ? "PM" : "AM";
-
-    hour = hour % 12;
-
-    if (hour === 0) {
-      hour = 12;
-    }
-
-    return `${String(hour).padStart(2, "0")}:${minute} ${period}`;
+    setIsLoggedIn(false);
   };
 
+  // ===================================================
   // FORM CHANGE
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  // ===================================================
 
-    setFormData((prev) => ({
+  const handleChange = (e) => {
+
+    const {
+      name,
+      value
+    } = e.target;
+
+    setForm((prev) => ({
       ...prev,
       [name]: value
     }));
+
+    // If Offline selected,
+    // remove meeting link.
+    if (
+      name === "interviewType" &&
+      value === "Offline"
+    ) {
+      setForm((prev) => ({
+        ...prev,
+        interviewType:
+          value,
+        meetingLink: ""
+      }));
+    }
   };
 
-  // ADD MODAL
-  const openAddModal = () => {
-    setEditingId(null);
+  // ===================================================
+  // OPEN ADD MODAL
+  // ===================================================
 
-    setFormData({
-      companyName: "",
-      candidateName: "",
-      candidateEmail: "",
-      interviewerName: "",
-      interviewDate: "",
-      interviewTime: "",
-      timePeriod: "AM",
-      interviewType: "Online",
-      meetingLink: "",
-      status: "Scheduled"
+  const openAddModal = () => {
+
+    setEditingInterview(null);
+
+    setForm({
+      ...emptyForm
     });
 
     setShowModal(true);
   };
 
-  // EDIT MODAL
-  const openEditModal = (interview) => {
-    setEditingId(interview._id);
+  // ===================================================
+  // OPEN EDIT MODAL
+  // ===================================================
 
-    let time = interview.interviewTime || "";
-    let period = "AM";
+  const openEditModal =
+    (interview) => {
 
-    if (/AM|PM/i.test(time)) {
-      const match = time.match(/(AM|PM)/i);
-
-      if (match) {
-        period = match[1].toUpperCase();
-
-        time = time
-          .replace(/AM|PM/i, "")
-          .trim();
-      }
-    } else if (time.includes(":")) {
-      const hour = parseInt(
-        time.split(":")[0],
-        10
+      setEditingInterview(
+        interview
       );
 
-      if (!Number.isNaN(hour)) {
-        period = hour >= 12 ? "PM" : "AM";
-
-        let convertedHour = hour % 12;
-
-        if (convertedHour === 0) {
-          convertedHour = 12;
-        }
-
-        const minute = time.split(":")[1];
-
-        time =
-          `${String(convertedHour).padStart(
-            2,
-            "0"
-          )}:${minute}`;
-      }
-    }
-
-    setFormData({
-      companyName:
-        interview.companyName || "",
-
-      candidateName:
-        interview.candidateName || "",
-
-      candidateEmail:
-        interview.candidateEmail || "",
-
-      interviewerName:
-        interview.interviewerName || "",
-
-      interviewDate:
-        interview.interviewDate
-          ? interview.interviewDate.substring(0, 10)
-          : "",
-
-      interviewTime: time,
-
-      timePeriod: period,
-
-      interviewType:
-        interview.interviewType || "Online",
-
-      meetingLink:
-        interview.meetingLink || "",
-
-      status:
-        interview.status || "Scheduled"
-    });
-
-    setShowModal(true);
-  };
-
-  // SAVE INTERVIEW
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    try {
-      setError("");
+      let interviewDate = "";
 
       if (
-        !formData.companyName ||
-        !formData.candidateName ||
-        !formData.candidateEmail ||
-        !formData.interviewerName ||
-        !formData.interviewDate ||
-        !formData.interviewTime
+        interview.interviewDate
       ) {
-        alert("Please fill all required fields.");
+        const date =
+          new Date(
+            interview.interviewDate
+          );
+
+        if (
+          !Number.isNaN(
+            date.getTime()
+          )
+        ) {
+          interviewDate =
+            `${date.getUTCFullYear()}-${String(
+              date.getUTCMonth() + 1
+            ).padStart(2, "0")}-${String(
+              date.getUTCDate()
+            ).padStart(2, "0")}`;
+        }
+      }
+
+      let interviewTime =
+        interview.interviewTime ||
+        "";
+
+      // Convert AM/PM to HH:mm
+      if (
+        interviewTime
+          .toUpperCase()
+          .includes("AM") ||
+        interviewTime
+          .toUpperCase()
+          .includes("PM")
+      ) {
+
+        const parts =
+          interviewTime
+            .trim()
+            .toUpperCase()
+            .split(/\s+/);
+
+        const timePart =
+          parts[0];
+
+        const period =
+          parts[1];
+
+        let [
+          hours,
+          minutes
+        ] =
+          timePart
+            .split(":")
+            .map(Number);
+
+        if (
+          period === "PM" &&
+          hours !== 12
+        ) {
+          hours += 12;
+        }
+
+        if (
+          period === "AM" &&
+          hours === 12
+        ) {
+          hours = 0;
+        }
+
+        interviewTime =
+          `${String(hours).padStart(
+            2,
+            "0"
+          )}:${String(minutes).padStart(
+            2,
+            "0"
+          )}`;
+      }
+
+      setForm({
+        companyName:
+          interview.companyName ||
+          "",
+
+        candidateName:
+          interview.candidateName ||
+          "",
+
+        candidateEmail:
+          interview.candidateEmail ||
+          "",
+
+        interviewerName:
+          interview.interviewerName ||
+          "",
+
+        interviewDate,
+
+        interviewTime,
+
+        interviewType:
+          interview.interviewType ||
+          "Online",
+
+        meetingLink:
+          interview.meetingLink ||
+          ""
+      });
+
+      setShowModal(true);
+    };
+
+  // ===================================================
+  // CLOSE MODAL
+  // ===================================================
+
+  const closeModal = () => {
+
+    setShowModal(false);
+
+    setEditingInterview(null);
+
+    setForm({
+      ...emptyForm
+    });
+  };
+
+  // ===================================================
+  // CREATE / UPDATE
+  // ===================================================
+
+  const handleSubmit =
+    async (e) => {
+
+      e.preventDefault();
+
+      try {
+
+        const token =
+          localStorage.getItem(
+            "interviewEaseToken"
+          );
+
+        if (!token) {
+          setIsLoggedIn(false);
+          return;
+        }
+
+        const isEdit =
+          !!editingInterview;
+
+        const url =
+          isEdit
+            ? `${API_URL}/${editingInterview._id}`
+            : API_URL;
+
+        const method =
+          isEdit
+            ? "PUT"
+            : "POST";
+
+        const response =
+          await fetch(url, {
+            method,
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Bearer ${token}`
+            },
+
+            body: JSON.stringify({
+              companyName:
+                form.companyName,
+
+              candidateName:
+                form.candidateName,
+
+              candidateEmail:
+                form.candidateEmail,
+
+              interviewerName:
+                form.interviewerName,
+
+              interviewDate:
+                form.interviewDate,
+
+              interviewTime:
+                form.interviewTime,
+
+              interviewType:
+                form.interviewType,
+
+              meetingLink:
+                form.interviewType ===
+                "Online"
+                  ? form.meetingLink
+                  : ""
+            })
+          });
+
+        if (
+          response.status === 401
+        ) {
+          localStorage.removeItem(
+            "interviewEaseToken"
+          );
+
+          localStorage.removeItem(
+            "interviewEaseUser"
+          );
+
+          setIsLoggedIn(false);
+
+          return;
+        }
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          alert(
+            data.message ||
+            "Something went wrong"
+          );
+
+          return;
+        }
+
+        alert(
+          isEdit
+            ? "Interview updated successfully!"
+            : "Interview scheduled successfully!"
+        );
+
+        closeModal();
+
+        fetchInterviews();
+
+      } catch (error) {
+
+        console.error(
+          "SAVE ERROR:",
+          error
+        );
+
+        alert(
+          "Unable to connect to server"
+        );
+      }
+    };
+
+  // ===================================================
+  // DELETE
+  // ===================================================
+
+  const handleDelete =
+    async (id) => {
+
+      const confirmDelete =
+        window.confirm(
+          "Are you sure you want to delete this interview?"
+        );
+
+      if (!confirmDelete) {
         return;
       }
 
-      let hour = parseInt(
-        formData.interviewTime.split(":")[0],
-        10
-      );
+      try {
 
-      const minute =
-        formData.interviewTime.split(":")[1];
+        const token =
+          localStorage.getItem(
+            "interviewEaseToken"
+          );
 
-      if (
-        formData.timePeriod === "PM" &&
-        hour !== 12
-      ) {
-        hour += 12;
-      }
+        const response =
+          await fetch(
+            `${API_URL}/${id}`,
+            {
+              method: "DELETE",
 
-      if (
-        formData.timePeriod === "AM" &&
-        hour === 12
-      ) {
-        hour = 0;
-      }
+              headers: {
+                Authorization:
+                  `Bearer ${token}`
+              }
+            }
+          );
 
-      const finalTime =
-        `${String(hour).padStart(2, "0")}:${minute}`;
+        if (
+          response.status === 401
+        ) {
+          handleLogout();
+          return;
+        }
 
-      const dataToSend = {
-        companyName: formData.companyName,
-        candidateName: formData.candidateName,
-        candidateEmail: formData.candidateEmail,
-        interviewerName: formData.interviewerName,
-        interviewDate: formData.interviewDate,
-        interviewTime: finalTime,
-        interviewType: formData.interviewType,
-        meetingLink:
-          formData.interviewType === "Online"
-            ? formData.meetingLink
-            : "",
-        status: formData.status
-      };
+        const data =
+          await response.json();
 
-      const url = editingId
-        ? `${API_URL}/${editingId}`
-        : API_URL;
+        if (!response.ok) {
+          alert(
+            data.message ||
+            "Delete failed"
+          );
 
-      const method = editingId
-        ? "PUT"
-        : "POST";
+          return;
+        }
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(dataToSend)
-      });
+        fetchInterviews();
 
-      const result = await response.json();
+      } catch (error) {
 
-      if (
-        !response.ok ||
-        !result.success
-      ) {
-        throw new Error(
-          result.message || "Operation failed"
+        console.error(
+          "DELETE ERROR:",
+          error
+        );
+
+        alert(
+          "Unable to delete interview"
         );
       }
+    };
 
-      alert(
-        editingId
-          ? "Interview updated successfully!"
-          : "Interview scheduled successfully!"
-      );
+  // ===================================================
+  // COMPANIES
+  // ===================================================
 
-      setShowModal(false);
-      setEditingId(null);
+  const companies =
+    useMemo(() => {
 
-      await fetchInterviews();
+      const list =
+        interviews
+          .map(
+            (item) =>
+              item.companyName
+          )
+          .filter(Boolean);
 
-    } catch (err) {
-      console.error(err);
+      return [
+        ...new Set(list)
+      ].sort();
 
-      alert(
-        err.message ||
-        "Failed to save interview"
-      );
-    }
-  };
+    }, [interviews]);
 
-  // DELETE
-  const deleteInterview = async (id) => {
-    const confirmDelete =
-      window.confirm(
-        "Are you sure you want to delete this interview?"
-      );
+  // ===================================================
+  // FILTERED INTERVIEWS
+  // ===================================================
 
-    if (!confirmDelete) return;
+  const filteredInterviews =
+    useMemo(() => {
 
-    try {
-      const response = await fetch(
-        `${API_URL}/${id}`,
-        {
-          method: "DELETE"
+      return interviews.filter(
+        (interview) => {
+
+          const liveStatus =
+            getLiveStatus(
+              interview
+            );
+
+          const searchText =
+            search
+              .toLowerCase()
+              .trim();
+
+          const matchesSearch =
+            !searchText ||
+            String(
+              interview.companyName ||
+              ""
+            )
+              .toLowerCase()
+              .includes(searchText) ||
+
+            String(
+              interview.candidateName ||
+              ""
+            )
+              .toLowerCase()
+              .includes(searchText) ||
+
+            String(
+              interview.candidateEmail ||
+              ""
+            )
+              .toLowerCase()
+              .includes(searchText) ||
+
+            String(
+              interview.interviewerName ||
+              ""
+            )
+              .toLowerCase()
+              .includes(searchText);
+
+          const matchesCompany =
+            !companyFilter ||
+            interview.companyName ===
+              companyFilter;
+
+          const matchesStatus =
+            statusFilter === "All" ||
+            liveStatus ===
+              statusFilter;
+
+          const matchesType =
+            typeFilter === "All" ||
+            interview.interviewType ===
+              typeFilter;
+
+          return (
+            matchesSearch &&
+            matchesCompany &&
+            matchesStatus &&
+            matchesType
+          );
         }
       );
 
-      const result =
-        await response.json();
+    }, [
+      interviews,
+      search,
+      companyFilter,
+      statusFilter,
+      typeFilter
+    ]);
 
-      if (
-        !response.ok ||
-        !result.success
-      ) {
-        throw new Error(
-          result.message || "Delete failed"
-        );
-      }
+  // ===================================================
+  // DASHBOARD STATS
+  // ===================================================
 
-      alert(
-        "Interview deleted successfully!"
-      );
-
-      await fetchInterviews();
-
-    } catch (err) {
-      console.error(err);
-
-      alert(
-        err.message ||
-        "Failed to delete interview"
-      );
-    }
-  };
-
-  // COMPANY LIST
-  const companies = useMemo(() => {
-    const uniqueCompanies = interviews
-      .map(
-        (interview) =>
-          interview.companyName
-      )
-      .filter(
-        (company) =>
-          company &&
-          company.trim() !== ""
-      );
-
-    return [
-      ...new Set(uniqueCompanies)
-    ].sort();
-  }, [interviews]);
-
-  // FILTERED INTERVIEWS
-  const filteredInterviews = useMemo(() => {
-    const search =
-      searchText
-        .toLowerCase()
-        .trim();
-
-    return interviews.filter(
-      (interview) => {
-
-        const matchesSearch =
-          !search ||
-          interview.companyName
-            ?.toLowerCase()
-            .includes(search) ||
-          interview.candidateName
-            ?.toLowerCase()
-            .includes(search) ||
-          interview.candidateEmail
-            ?.toLowerCase()
-            .includes(search) ||
-          interview.interviewerName
-            ?.toLowerCase()
-            .includes(search);
-
-        const matchesCompany =
-          companyFilter === "All" ||
-          interview.companyName ===
-            companyFilter;
-
-        const matchesStatus =
-          statusFilter === "All" ||
-          interview.status ===
-            statusFilter;
-
-        const matchesType =
-          typeFilter === "All" ||
-          interview.interviewType ===
-            typeFilter;
-
-        return (
-          matchesSearch &&
-          matchesCompany &&
-          matchesStatus &&
-          matchesType
-        );
-      }
-    );
-  }, [
-    interviews,
-    searchText,
-    companyFilter,
-    statusFilter,
-    typeFilter
-  ]);
-
-  // COMPANY DASHBOARD
-  const dashboardInterviews =
+  const stats =
     useMemo(() => {
 
-      if (companyFilter === "All") {
-        return interviews;
-      }
+      const selected =
+        companyFilter
+          ? interviews.filter(
+              (item) =>
+                item.companyName ===
+                companyFilter
+            )
+          : interviews;
 
-      return interviews.filter(
-        (interview) =>
-          interview.companyName ===
-          companyFilter
-      );
+      const total =
+        selected.length;
+
+      const scheduled =
+        selected.filter(
+          (item) =>
+            getLiveStatus(item) ===
+            "Scheduled"
+        ).length;
+
+      const completed =
+        selected.filter(
+          (item) =>
+            getLiveStatus(item) ===
+            "Completed"
+        ).length;
+
+      const cancelled =
+        selected.filter(
+          (item) =>
+            getLiveStatus(item) ===
+            "Cancelled"
+        ).length;
+
+      const percentage =
+        total > 0
+          ? Math.round(
+              (completed /
+                total) *
+                100
+            )
+          : 0;
+
+      return {
+        total,
+        scheduled,
+        completed,
+        cancelled,
+        percentage
+      };
 
     }, [
       interviews,
       companyFilter
     ]);
 
-  const dashboardTotal =
-    dashboardInterviews.length;
+  // ===================================================
+  // NEXT UPCOMING INTERVIEW
+  // ===================================================
 
-  const dashboardCompleted =
-    dashboardInterviews.filter(
-      (item) =>
-        item.status === "Completed"
-    ).length;
-
-  const dashboardCancelled =
-    dashboardInterviews.filter(
-      (item) =>
-        item.status === "Cancelled"
-    ).length;
-
-  const dashboardScheduled =
-    dashboardInterviews.filter(
-      (item) =>
-        item.status === "Scheduled"
-    ).length;
-
-  const dashboardCompletionRate =
-    dashboardTotal > 0
-      ? Math.round(
-          (dashboardCompleted /
-            dashboardTotal) *
-            100
-        )
-      : 0;
-
-  // UPCOMING COUNT
-  const today = new Date();
-
-  today.setHours(
-    0,
-    0,
-    0,
-    0
-  );
-
-  const dashboardUpcoming =
-    dashboardInterviews.filter(
-      (item) => {
-
-        if (
-          item.status !==
-          "Scheduled"
-        ) {
-          return false;
-        }
-
-        const interviewDate =
-          new Date(
-            item.interviewDate
-          );
-
-        interviewDate.setHours(
-          0,
-          0,
-          0,
-          0
-        );
-
-        return (
-          interviewDate >= today
-        );
-      }
-    ).length;
-
-  // NEXT INTERVIEW
   const nextInterview =
     useMemo(() => {
 
@@ -542,62 +1020,38 @@ function App() {
 
       const upcoming =
         interviews
-          .filter(
-            (item) => {
+          .filter((interview) => {
 
-              if (
-                item.status !==
-                "Scheduled"
-              ) {
-                return false;
-              }
-
-              if (
-                !item.interviewDate
-              ) {
-                return false;
-              }
-
-              if (
-                companyFilter !==
-                  "All" &&
-                item.companyName !==
-                  companyFilter
-              ) {
-                return false;
-              }
-
-              const date =
-                new Date(
-                  item.interviewDate
-                );
-
-              if (
-                Number.isNaN(
-                  date.getTime()
-                )
-              ) {
-                return false;
-              }
-
-              return (
-                date >=
-                new Date(
-                  now.getFullYear(),
-                  now.getMonth(),
-                  now.getDate()
-                )
-              );
+            if (
+              companyFilter &&
+              interview.companyName !==
+                companyFilter
+            ) {
+              return false;
             }
-          )
+
+            if (
+              getLiveStatus(
+                interview
+              ) !== "Scheduled"
+            ) {
+              return false;
+            }
+
+            const dateTime =
+              getInterviewDateTime(
+                interview
+              );
+
+            return (
+              dateTime &&
+              dateTime > now
+            );
+          })
           .sort(
             (a, b) =>
-              new Date(
-                a.interviewDate
-              ).getTime() -
-              new Date(
-                b.interviewDate
-              ).getTime()
+              getInterviewDateTime(a) -
+              getInterviewDateTime(b)
           );
 
       return upcoming[0] || null;
@@ -607,70 +1061,100 @@ function App() {
       companyFilter
     ]);
 
-  // JOIN
-  const joinInterview =
-    (interview) => {
+  // ===================================================
+  // COMPANY SUMMARY
+  // ===================================================
 
-      if (
-        interview.status !==
-        "Scheduled"
-      ) {
-        return;
+  const companySummary =
+    useMemo(() => {
+
+      if (!companyFilter) {
+        return null;
       }
 
-      if (
-        interview.interviewType !==
-        "Online"
-      ) {
-        return;
-      }
-
-      if (
-        !interview.meetingLink
-      ) {
-        alert(
-          "Meeting link is not available."
+      const companyInterviews =
+        interviews.filter(
+          (item) =>
+            item.companyName ===
+            companyFilter
         );
 
-        return;
-      }
+      return {
+        total:
+          companyInterviews.length,
 
-      window.open(
-        interview.meetingLink,
-        "_blank",
-        "noopener,noreferrer"
-      );
-    };
+        scheduled:
+          companyInterviews.filter(
+            (item) =>
+              getLiveStatus(item) ===
+              "Scheduled"
+          ).length,
 
+        completed:
+          companyInterviews.filter(
+            (item) =>
+              getLiveStatus(item) ===
+              "Completed"
+          ).length,
+
+        cancelled:
+          companyInterviews.filter(
+            (item) =>
+              getLiveStatus(item) ===
+              "Cancelled"
+          ).length
+      };
+
+    }, [
+      interviews,
+      companyFilter
+    ]);
+
+  // ===================================================
   // CLEAR FILTERS
+  // ===================================================
+
   const clearFilters = () => {
-    setSearchText("");
-    setCompanyFilter("All");
+
+    setSearch("");
+    setCompanyFilter("");
     setStatusFilter("All");
     setTypeFilter("All");
   };
 
-  // CLOSE MODAL
-  const closeModal = () => {
-    setShowModal(false);
-    setEditingId(null);
-  };
+  // ===================================================
+  // LOGIN SCREEN
+  // ===================================================
+
+  if (!isLoggedIn) {
+
+    return (
+      <Login
+        onLogin={handleLogin}
+      />
+    );
+  }
+
+  // ===================================================
+  // MAIN UI
+  // ===================================================
 
   return (
     <div className="app">
 
-      {/* HEADER */}
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
-      <header className="header">
+      <header className="top-header">
 
         <div className="brand">
 
-          <div className="logo">
-            IE
+          <div className="brand-icon">
+            💼
           </div>
 
           <div>
-
             <h1>
               InterviewEase
             </h1>
@@ -678,59 +1162,71 @@ function App() {
             <p>
               Interview Scheduling System
             </p>
-
           </div>
 
         </div>
 
-        <button
-          className="schedule-btn"
-          onClick={openAddModal}
-        >
-          + Schedule Interview
-        </button>
+        <div className="header-actions">
+
+          <button
+            className="add-btn"
+            onClick={
+              openAddModal
+            }
+          >
+            ＋ Add Interview
+          </button>
+
+          <button
+            className="logout-btn"
+            onClick={
+              handleLogout
+            }
+          >
+            Logout
+          </button>
+
+        </div>
 
       </header>
 
-      <main className="container">
 
-        {/* DASHBOARD TITLE */}
+      {/* =================================================
+          MAIN
+      ================================================= */}
+
+      <main className="main-content">
+
+        {/* =================================================
+            DASHBOARD HEADING
+        ================================================= */}
 
         <div className="dashboard-heading">
 
           <div>
-
             <h2>
               Dashboard
             </h2>
 
             <p>
-              {companyFilter === "All"
-                ? "Overview of all interviews"
-                : `Showing statistics for ${companyFilter}`}
+              Manage and track your interviews
             </p>
-
           </div>
 
-          {companyFilter !== "All" && (
-
+          {companyFilter && (
             <div className="selected-company">
-
-              🏢{" "}
-
-              <strong>
-                {companyFilter}
-              </strong>
-
+              🏢 {companyFilter}
             </div>
-
           )}
 
         </div>
 
-        {/* DASHBOARD STATS */}
 
-        <section className="stats">
+        {/* =================================================
+            STATS
+        ================================================= */}
+
+        <div className="stats">
 
           <div className="stat-card">
 
@@ -739,38 +1235,36 @@ function App() {
             </div>
 
             <div>
-
               <span>
-                Total Interviews
+                TOTAL INTERVIEWS
               </span>
 
               <strong>
-                {dashboardTotal}
+                {stats.total}
               </strong>
-
             </div>
 
           </div>
+
 
           <div className="stat-card">
 
             <div className="stat-icon scheduled">
-              📅
+              🗓️
             </div>
 
             <div>
-
               <span>
-                Upcoming
+                SCHEDULED
               </span>
 
               <strong>
-                {dashboardUpcoming}
+                {stats.scheduled}
               </strong>
-
             </div>
 
           </div>
+
 
           <div className="stat-card">
 
@@ -779,38 +1273,36 @@ function App() {
             </div>
 
             <div>
-
               <span>
-                Completed
+                COMPLETED
               </span>
 
               <strong>
-                {dashboardCompleted}
+                {stats.completed}
               </strong>
-
             </div>
 
           </div>
+
 
           <div className="stat-card">
 
             <div className="stat-icon cancelled">
-              ×
+              ✕
             </div>
 
             <div>
-
               <span>
-                Cancelled
+                CANCELLED
               </span>
 
               <strong>
-                {dashboardCancelled}
+                {stats.cancelled}
               </strong>
-
             </div>
 
           </div>
+
 
           <div className="stat-card">
 
@@ -819,108 +1311,101 @@ function App() {
             </div>
 
             <div>
-
               <span>
-                Completion Rate
+                COMPLETION RATE
               </span>
 
               <strong>
-                {dashboardCompletionRate}%
+                {stats.percentage}%
               </strong>
-
             </div>
 
           </div>
 
-        </section>
+        </div>
 
-        {/* COMPANY SUMMARY */}
 
-        {companyFilter !== "All" && (
+        {/* =================================================
+            COMPANY SUMMARY
+        ================================================= */}
 
-          <section className="company-summary">
+        {companyFilter &&
+          companySummary && (
+            <div className="company-summary">
 
-            <div className="company-summary-header">
+              <div className="company-summary-header">
 
-              <div>
+                <div>
+                  <div className="company-summary-label">
+                    COMPANY SUMMARY
+                  </div>
 
-                <span className="company-summary-label">
-                  COMPANY SUMMARY
-                </span>
+                  <h3>
+                    🏢 {companyFilter}
+                  </h3>
+                </div>
 
-                <h3>
-                  {companyFilter}
-                </h3>
-
-              </div>
-
-              <div className="company-total-badge">
-                {dashboardTotal} Interviews
-              </div>
-
-            </div>
-
-            <div className="company-summary-grid">
-
-              <div className="company-summary-item">
-
-                <span>
-                  Scheduled
-                </span>
-
-                <strong>
-                  {dashboardScheduled}
-                </strong>
+                <div className="company-total-badge">
+                  {companySummary.total} Interviews
+                </div>
 
               </div>
 
-              <div className="company-summary-item">
+              <div className="company-summary-grid">
 
-                <span>
-                  Completed
-                </span>
+                <div className="company-summary-item">
+                  <span>
+                    Total
+                  </span>
 
-                <strong>
-                  {dashboardCompleted}
-                </strong>
+                  <strong>
+                    {companySummary.total}
+                  </strong>
+                </div>
 
-              </div>
+                <div className="company-summary-item">
+                  <span>
+                    Scheduled
+                  </span>
 
-              <div className="company-summary-item">
+                  <strong>
+                    {companySummary.scheduled}
+                  </strong>
+                </div>
 
-                <span>
-                  Cancelled
-                </span>
+                <div className="company-summary-item">
+                  <span>
+                    Completed
+                  </span>
 
-                <strong>
-                  {dashboardCancelled}
-                </strong>
+                  <strong>
+                    {companySummary.completed}
+                  </strong>
+                </div>
 
-              </div>
+                <div className="company-summary-item">
+                  <span>
+                    Cancelled
+                  </span>
 
-              <div className="company-summary-item">
-
-                <span>
-                  Completion Rate
-                </span>
-
-                <strong>
-                  {dashboardCompletionRate}%
-                </strong>
+                  <strong>
+                    {companySummary.cancelled}
+                  </strong>
+                </div>
 
               </div>
 
             </div>
+          )}
 
-          </section>
 
-        )}
-
-        {/* NEXT UPCOMING INTERVIEW */}
+        {/* =================================================
+            NEXT INTERVIEW
+        ================================================= */}
 
         {nextInterview && (
 
-          <section className="next-interview-card">
+          <div className="next-interview-card">
 
             <div className="next-interview-left">
 
@@ -930,42 +1415,34 @@ function App() {
 
               <div>
 
-                <span className="next-label">
+                <div className="next-label">
                   NEXT UPCOMING INTERVIEW
-                </span>
+                </div>
 
                 <h3>
-                  {nextInterview.companyName}
+                  {nextInterview.candidateName}
                 </h3>
 
                 <p>
-                  Candidate:{" "}
-                  <strong>
-                    {
-                      nextInterview.candidateName
-                    }
-                  </strong>
-                </p>
-
-                <p>
-                  Interviewer:{" "}
-                  <strong>
-                    {
-                      nextInterview.interviewerName
-                    }
-                  </strong>
+                  🏢{" "}
+                  {nextInterview.companyName ||
+                    "-"}
+                  {" • "}
+                  👤{" "}
+                  {nextInterview.interviewerName ||
+                    "-"}
                 </p>
 
               </div>
 
             </div>
 
+
             <div className="next-interview-details">
 
               <div>
-
                 <span>
-                  📅 Date
+                  DATE
                 </span>
 
                 <strong>
@@ -973,13 +1450,11 @@ function App() {
                     nextInterview.interviewDate
                   )}
                 </strong>
-
               </div>
 
               <div>
-
                 <span>
-                  🕐 Time
+                  TIME
                 </span>
 
                 <strong>
@@ -987,773 +1462,950 @@ function App() {
                     nextInterview.interviewTime
                   )}
                 </strong>
-
               </div>
 
               <div>
-
                 <span>
-                  💻 Type
+                  TYPE
                 </span>
 
                 <strong>
-                  {
-                    nextInterview.interviewType
-                  }
+                  {nextInterview.interviewType}
                 </strong>
-
               </div>
 
             </div>
 
-          </section>
-
+          </div>
         )}
 
-        {/* INTERVIEWS */}
 
-        <section className="interviews-section">
+        {/* =================================================
+            FILTERS
+        ================================================= */}
 
-          <div className="section-heading">
+        <div className="filters">
 
-            <div>
+          <div className="search-box">
 
-              <h2>
-                Scheduled Interviews
-              </h2>
+            <span>
+              🔍
+            </span>
 
-              <p>
-                Manage all your interviews
-              </p>
-
-            </div>
-
-            <div className="result-count">
-
-              {filteredInterviews.length}{" "}
-              interview
-              {filteredInterviews.length !== 1
-                ? "s"
-                : ""}
-
-            </div>
+            <input
+              type="text"
+              placeholder="Search company, candidate, email..."
+              value={search}
+              onChange={(e) =>
+                setSearch(
+                  e.target.value
+                )
+              }
+            />
 
           </div>
 
-          {/* FILTERS */}
 
-          <div className="filters">
+          <select
+            value={companyFilter}
+            onChange={(e) =>
+              setCompanyFilter(
+                e.target.value
+              )
+            }
+          >
+            <option value="">
+              All Companies
+            </option>
 
-            <div className="search-box">
-
-              <span>
-                🔍
-              </span>
-
-              <input
-                type="text"
-                placeholder="Search company, candidate, email or interviewer..."
-                value={searchText}
-                onChange={(e) =>
-                  setSearchText(
-                    e.target.value
-                  )
-                }
-              />
-
-            </div>
-
-            <select
-              value={companyFilter}
-              onChange={(e) =>
-                setCompanyFilter(
-                  e.target.value
-                )
-              }
-            >
-
-              <option value="All">
-                All Companies
-              </option>
-
-              {companies.map(
-                (company) => (
-
-                  <option
-                    key={company}
-                    value={company}
-                  >
-                    {company}
-                  </option>
-
-                )
-              )}
-
-            </select>
-
-            <select
-              value={statusFilter}
-              onChange={(e) =>
-                setStatusFilter(
-                  e.target.value
-                )
-              }
-            >
-
-              <option value="All">
-                All Status
-              </option>
-
-              <option value="Scheduled">
-                Scheduled
-              </option>
-
-              <option value="Completed">
-                Completed
-              </option>
-
-              <option value="Cancelled">
-                Cancelled
-              </option>
-
-            </select>
-
-            <select
-              value={typeFilter}
-              onChange={(e) =>
-                setTypeFilter(
-                  e.target.value
-                )
-              }
-            >
-
-              <option value="All">
-                All Types
-              </option>
-
-              <option value="Online">
-                Online
-              </option>
-
-              <option value="Offline">
-                Offline
-              </option>
-
-            </select>
-
-            <button
-              className="clear-btn"
-              onClick={clearFilters}
-            >
-              Clear
-            </button>
-
-          </div>
-
-          {/* ERROR */}
-
-          {error && (
-
-            <div className="error-box">
-
-              <div className="warning-icon">
-                ⚠️
-              </div>
-
-              <h3>
-                Unable to load interviews
-              </h3>
-
-              <p>
-                {error}
-              </p>
-
-              <button
-                onClick={
-                  fetchInterviews
-                }
-              >
-                Try Again
-              </button>
-
-            </div>
-
-          )}
-
-          {/* LOADING */}
-
-          {loading &&
-            !error && (
-
-              <div className="loading">
-                Loading interviews...
-              </div>
-
+            {companies.map(
+              (company) => (
+                <option
+                  key={company}
+                  value={company}
+                >
+                  {company}
+                </option>
+              )
             )}
 
-          {/* TABLE */}
+          </select>
 
-          {!loading &&
-            !error &&
-            filteredInterviews.length > 0 && (
 
-              <div className="table-wrapper">
+          <select
+            value={statusFilter}
+            onChange={(e) =>
+              setStatusFilter(
+                e.target.value
+              )
+            }
+          >
+            <option value="All">
+              All Status
+            </option>
 
-                <table>
+            <option value="Scheduled">
+              Scheduled
+            </option>
 
-                  <thead>
+            <option value="Completed">
+              Completed
+            </option>
 
-                    <tr>
+            <option value="Cancelled">
+              Cancelled
+            </option>
 
-                      <th>
-                        COMPANY
-                      </th>
+          </select>
 
-                      <th>
-                        CANDIDATE
-                      </th>
 
-                      <th>
-                        INTERVIEWER
-                      </th>
+          <select
+            value={typeFilter}
+            onChange={(e) =>
+              setTypeFilter(
+                e.target.value
+              )
+            }
+          >
+            <option value="All">
+              All Types
+            </option>
 
-                      <th>
-                        DATE
-                      </th>
+            <option value="Online">
+              Online
+            </option>
 
-                      <th>
-                        TIME
-                      </th>
+            <option value="Offline">
+              Offline
+            </option>
 
-                      <th>
-                        TYPE
-                      </th>
+          </select>
 
-                      <th>
-                        STATUS
-                      </th>
 
-                      <th>
-                        ACTIONS
-                      </th>
+          <button
+            className="clear-btn"
+            onClick={
+              clearFilters
+            }
+          >
+            Clear
+          </button>
 
-                    </tr>
+        </div>
 
-                  </thead>
 
-                  <tbody>
+        {/* =================================================
+            TABLE
+        ================================================= */}
 
-                    {filteredInterviews.map(
-                      (interview) => (
+        <div className="table-container">
 
-                        <tr
-                          key={
-                            interview._id
-                          }
-                        >
+          <table>
 
-                          <td>
+            <thead>
+
+              <tr>
+
+                <th>
+                  COMPANY
+                </th>
+
+                <th>
+                  CANDIDATE
+                </th>
+
+                <th>
+                  INTERVIEWER
+                </th>
+
+                <th>
+                  DATE
+                </th>
+
+                <th>
+                  TIME
+                </th>
+
+                <th>
+                  TYPE
+                </th>
+
+                <th>
+                  STATUS
+                </th>
+
+                <th>
+                  ACTIONS
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody>
+
+              {loading ? (
+
+                <tr>
+                  <td
+                    colSpan="8"
+                    className="empty-state"
+                  >
+                    Loading interviews...
+                  </td>
+                </tr>
+
+              ) : filteredInterviews.length ===
+                0 ? (
+
+                <tr>
+                  <td
+                    colSpan="8"
+                    className="empty-state"
+                  >
+                    <div>
+                      <div className="empty-icon">
+                        📭
+                      </div>
+
+                      <h3>
+                        No Interviews Found
+                      </h3>
+
+                      <p>
+                        Try changing your filters
+                        or schedule a new interview.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+
+              ) : (
+
+                filteredInterviews.map(
+                  (interview) => {
+
+                    const liveStatus =
+                      getLiveStatus(
+                        interview
+                      );
+
+                    return (
+
+                      <tr
+                        key={
+                          interview._id
+                        }
+                      >
+
+                        {/* COMPANY */}
+
+                        <td>
+
+                          <strong>
+                            {interview.companyName ||
+                              "-"}
+                          </strong>
+
+                        </td>
+
+
+                        {/* CANDIDATE */}
+
+                        <td>
+
+                          <div className="candidate-cell">
 
                             <strong>
-                              {
-                                interview.companyName ||
-                                "-"
-                              }
+                              {interview.candidateName ||
+                                "-"}
                             </strong>
 
-                          </td>
+                            <span>
+                              {interview.candidateEmail ||
+                                "-"}
+                            </span>
 
-                          <td>
+                          </div>
 
-                            <div className="candidate">
+                        </td>
 
-                              <strong>
-                                {
-                                  interview.candidateName
-                                }
-                              </strong>
 
-                              <small>
-                                {
-                                  interview.candidateEmail
-                                }
-                              </small>
+                        {/* INTERVIEWER */}
 
-                            </div>
+                        <td>
+                          {interview.interviewerName ||
+                            "-"}
+                        </td>
 
-                          </td>
 
-                          <td>
-                            {
-                              interview.interviewerName
-                            }
-                          </td>
+                        {/* DATE */}
 
-                          <td>
+                        <td>
+                          <strong>
                             {formatDate(
                               interview.interviewDate
                             )}
-                          </td>
+                          </strong>
+                        </td>
 
-                          <td>
+
+                        {/* TIME */}
+
+                        <td>
+
+                          <strong>
                             {formatTime(
                               interview.interviewTime
                             )}
-                          </td>
+                          </strong>
 
-                          <td>
+                        </td>
 
-                            <span
-                              className={`type-badge ${
-                                interview.interviewType ===
-                                "Online"
-                                  ? "online"
-                                  : "offline"
-                              }`}
-                            >
-                              {
-                                interview.interviewType
+
+                        {/* TYPE */}
+
+                        <td>
+
+                          <span
+                            className={`type-badge ${
+                              interview.interviewType
+                                ?.toLowerCase()
+                            }`}
+                          >
+
+                            {interview.interviewType ===
+                            "Online"
+                              ? "💻"
+                              : "🏢"}
+
+                            {" "}
+
+                            {interview.interviewType ||
+                              "-"}
+
+                          </span>
+
+                        </td>
+
+
+                        {/* STATUS */}
+
+                        <td>
+
+                          <span
+                            className={`status-badge ${
+                              liveStatus.toLowerCase()
+                            }`}
+                          >
+
+                            <span className="status-dot"></span>
+
+                            {liveStatus}
+
+                          </span>
+
+                        </td>
+
+
+                        {/* ACTIONS */}
+
+                        <td>
+
+                          <div className="action-buttons">
+
+                            {/* JOIN */}
+
+                            {liveStatus ===
+                              "Scheduled" &&
+                              interview.interviewType ===
+                                "Online" &&
+                              interview.meetingLink && (
+
+                                <a
+                                  href={
+                                    interview.meetingLink
+                                  }
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="join-btn"
+                                >
+                                  Join
+                                </a>
+
+                              )}
+
+
+                            {/* EDIT */}
+
+                            <button
+                              className="edit-btn"
+                              onClick={() =>
+                                openEditModal(
+                                  interview
+                                )
                               }
-                            </span>
-
-                          </td>
-
-                          <td>
-
-                            <span
-                              className={`status-badge ${
-                                interview.status?.toLowerCase()
-                              }`}
                             >
-                              {
-                                interview.status
+                              ✏️
+                            </button>
+
+
+                            {/* DELETE */}
+
+                            <button
+                              className="delete-btn"
+                              onClick={() =>
+                                handleDelete(
+                                  interview._id
+                                )
                               }
-                            </span>
+                            >
+                              🗑️
+                            </button>
 
-                          </td>
+                          </div>
 
-                          <td>
+                        </td>
 
-                            <div className="actions">
+                      </tr>
 
-                              {interview.status ===
-                                "Scheduled" &&
-                                interview.interviewType ===
-                                  "Online" && (
+                    );
+                  }
+                )
 
-                                  <button
-                                    className="join-btn"
-                                    onClick={() =>
-                                      joinInterview(
-                                        interview
-                                      )
-                                    }
-                                  >
-                                    Join
-                                  </button>
+              )}
 
-                                )}
+            </tbody>
 
-                              <button
-                                className="edit-btn"
-                                onClick={() =>
-                                  openEditModal(
-                                    interview
-                                  )
-                                }
-                              >
-                                Edit
-                              </button>
+          </table>
 
-                              <button
-                                className="delete-btn"
-                                onClick={() =>
-                                  deleteInterview(
-                                    interview._id
-                                  )
-                                }
-                              >
-                                Delete
-                              </button>
-
-                            </div>
-
-                          </td>
-
-                        </tr>
-
-                      )
-                    )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            )}
-
-          {/* EMPTY */}
-
-          {!loading &&
-            !error &&
-            filteredInterviews.length === 0 && (
-
-              <div className="empty">
-
-                <div className="empty-icon">
-                  🔍
-                </div>
-
-                {interviews.length === 0 ? (
-
-                  <>
-
-                    <h3>
-                      No interviews found
-                    </h3>
-
-                    <p>
-                      Click "Schedule Interview"
-                      to create your first
-                      interview.
-                    </p>
-
-                  </>
-
-                ) : (
-
-                  <>
-
-                    <h3>
-                      No matching interviews
-                    </h3>
-
-                    <p>
-                      Try changing your
-                      search or filter
-                      options.
-                    </p>
-
-                    <button
-                      onClick={
-                        clearFilters
-                      }
-                    >
-                      Clear Filters
-                    </button>
-
-                  </>
-
-                )}
-
-              </div>
-
-            )}
-
-        </section>
+        </div>
 
       </main>
 
-      {/* MODAL */}
+
+      {/* =================================================
+          ADD / EDIT INTERVIEW MODAL
+      ================================================= */}
 
       {showModal && (
 
         <div
           className="modal-overlay"
-          onClick={closeModal}
+          onClick={
+            closeModal
+          }
         >
 
           <div
-            className="modal"
+            className="interview-modal"
             onClick={(e) =>
               e.stopPropagation()
             }
           >
 
+            {/* =================================================
+                MODAL HEADER
+            ================================================= */}
+
             <div className="modal-header">
 
-              <div>
+              <div className="modal-title-section">
 
-                <h2>
-                  {editingId
-                    ? "Edit Interview"
-                    : "Schedule Interview"}
-                </h2>
+                <div className="modal-icon">
+                  {editingInterview
+                    ? "✏️"
+                    : "📅"}
+                </div>
 
-                <p>
-                  {editingId
-                    ? "Update interview details"
-                    : "Add a new interview"}
-                </p>
+                <div>
+
+                  <h2>
+                    {editingInterview
+                      ? "Edit Interview"
+                      : "Schedule Interview"}
+                  </h2>
+
+                  <p>
+                    {editingInterview
+                      ? "Update the interview details below"
+                      : "Create a new interview schedule"}
+                  </p>
+
+                </div>
 
               </div>
 
+
               <button
-                className="close-btn"
-                onClick={closeModal}
+                className="modal-close"
+                onClick={
+                  closeModal
+                }
               >
-                ×
+                ✕
               </button>
 
             </div>
 
+
+            {/* =================================================
+                FORM
+            ================================================= */}
+
             <form
-              onSubmit={handleSubmit}
-              className="form"
+              onSubmit={
+                handleSubmit
+              }
             >
 
-              <div className="form-grid">
+              {/* =================================================
+                  INTERVIEW DETAILS
+              ================================================= */}
 
-                <div className="form-group full">
+              <div className="form-section">
 
-                  <label>
-                    Company Name
-                  </label>
+                <div className="form-section-title">
 
-                  <input
-                    type="text"
-                    name="companyName"
-                    value={
-                      formData.companyName
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    placeholder="Enter company name"
-                    required
-                  />
+                  <span>
+                    👤
+                  </span>
 
-                </div>
+                  <div>
 
-                <div className="form-group">
+                    <h3>
+                      Interview Details
+                    </h3>
 
-                  <label>
-                    Candidate Name
-                  </label>
-
-                  <input
-                    type="text"
-                    name="candidateName"
-                    value={
-                      formData.candidateName
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Candidate Email
-                  </label>
-
-                  <input
-                    type="email"
-                    name="candidateEmail"
-                    value={
-                      formData.candidateEmail
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Interviewer Name
-                  </label>
-
-                  <input
-                    type="text"
-                    name="interviewerName"
-                    value={
-                      formData.interviewerName
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Interview Date
-                  </label>
-
-                  <input
-                    type="date"
-                    name="interviewDate"
-                    value={
-                      formData.interviewDate
-                    }
-                    onChange={
-                      handleChange
-                    }
-                    required
-                  />
-
-                </div>
-
-                <div className="form-group">
-
-                  <label>
-                    Interview Time
-                  </label>
-
-                  <div className="time-row">
-
-                    <input
-                      type="time"
-                      name="interviewTime"
-                      value={
-                        formData.interviewTime
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      required
-                    />
-
-                    <select
-                      name="timePeriod"
-                      value={
-                        formData.timePeriod
-                      }
-                      onChange={
-                        handleChange
-                      }
-                    >
-
-                      <option value="AM">
-                        AM
-                      </option>
-
-                      <option value="PM">
-                        PM
-                      </option>
-
-                    </select>
+                    <p>
+                      Enter company and candidate information
+                    </p>
 
                   </div>
 
                 </div>
 
-                <div className="form-group">
 
-                  <label>
-                    Interview Type
-                  </label>
+                <div className="form-grid">
 
-                  <select
-                    name="interviewType"
-                    value={
-                      formData.interviewType
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  >
+                  {/* COMPANY */}
 
-                    <option value="Online">
-                      Online
-                    </option>
-
-                    <option value="Offline">
-                      Offline
-                    </option>
-
-                  </select>
-
-                </div>
-
-                {formData.interviewType ===
-                  "Online" && (
-
-                  <div className="form-group full">
+                  <div className="form-group">
 
                     <label>
-                      Meeting Link
+                      Company Name{" "}
+                      <span>*</span>
                     </label>
 
-                    <input
-                      type="url"
-                      name="meetingLink"
-                      value={
-                        formData.meetingLink
-                      }
-                      onChange={
-                        handleChange
-                      }
-                      placeholder="https://meeting.com"
-                    />
+                    <div className="input-wrapper">
+
+                      <span className="input-icon">
+                        🏢
+                      </span>
+
+                      <input
+                        type="text"
+                        name="companyName"
+                        placeholder="Enter company name"
+                        value={
+                          form.companyName
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        required
+                      />
+
+                    </div>
 
                   </div>
 
-                )}
 
-                <div className="form-group">
+                  {/* CANDIDATE */}
 
-                  <label>
-                    Status
-                  </label>
+                  <div className="form-group">
 
-                  <select
-                    name="status"
-                    value={
-                      formData.status
-                    }
-                    onChange={
-                      handleChange
-                    }
-                  >
+                    <label>
+                      Candidate Name{" "}
+                      <span>*</span>
+                    </label>
 
-                    <option value="Scheduled">
-                      Scheduled
-                    </option>
+                    <div className="input-wrapper">
 
-                    <option value="Completed">
-                      Completed
-                    </option>
+                      <span className="input-icon">
+                        👤
+                      </span>
 
-                    <option value="Cancelled">
-                      Cancelled
-                    </option>
+                      <input
+                        type="text"
+                        name="candidateName"
+                        placeholder="Enter candidate name"
+                        value={
+                          form.candidateName
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        required
+                      />
 
-                  </select>
+                    </div>
+
+                  </div>
+
+
+                  {/* EMAIL */}
+
+                  <div className="form-group">
+
+                    <label>
+                      Candidate Email{" "}
+                      <span>*</span>
+                    </label>
+
+                    <div className="input-wrapper">
+
+                      <span className="input-icon">
+                        ✉️
+                      </span>
+
+                      <input
+                        type="email"
+                        name="candidateEmail"
+                        placeholder="candidate@email.com"
+                        value={
+                          form.candidateEmail
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        required
+                      />
+
+                    </div>
+
+                  </div>
+
+
+                  {/* INTERVIEWER */}
+
+                  <div className="form-group">
+
+                    <label>
+                      Interviewer Name{" "}
+                      <span>*</span>
+                    </label>
+
+                    <div className="input-wrapper">
+
+                      <span className="input-icon">
+                        🎤
+                      </span>
+
+                      <input
+                        type="text"
+                        name="interviewerName"
+                        placeholder="Enter interviewer name"
+                        value={
+                          form.interviewerName
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        required
+                      />
+
+                    </div>
+
+                  </div>
 
                 </div>
 
               </div>
 
-              <div className="modal-actions">
+
+              {/* =================================================
+                  SCHEDULE
+              ================================================= */}
+
+              <div className="form-section">
+
+                <div className="form-section-title">
+
+                  <span>
+                    🗓️
+                  </span>
+
+                  <div>
+
+                    <h3>
+                      Schedule
+                    </h3>
+
+                    <p>
+                      Select interview date and time
+                    </p>
+
+                  </div>
+
+                </div>
+
+
+                <div className="form-grid">
+
+                  {/* DATE */}
+
+                  <div className="form-group">
+
+                    <label>
+                      Interview Date{" "}
+                      <span>*</span>
+                    </label>
+
+                    <div className="input-wrapper">
+
+                      <span className="input-icon">
+                        📅
+                      </span>
+
+                      <input
+                        type="date"
+                        name="interviewDate"
+                        value={
+                          form.interviewDate
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        required
+                      />
+
+                    </div>
+
+                  </div>
+
+
+                  {/* TIME */}
+
+                  <div className="form-group">
+
+                    <label>
+                      Interview Time{" "}
+                      <span>*</span>
+                    </label>
+
+                    <div className="input-wrapper">
+
+                      <span className="input-icon">
+                        ⏰
+                      </span>
+
+                      <input
+                        type="time"
+                        name="interviewTime"
+                        value={
+                          form.interviewTime
+                        }
+                        onChange={
+                          handleChange
+                        }
+                        required
+                      />
+
+                    </div>
+
+                    <small className="field-hint">
+                      Select the interview start time
+                    </small>
+
+                  </div>
+
+
+                  {/* INTERVIEW TYPE */}
+
+                  <div className="form-group full-width">
+
+                    <label>
+                      Interview Type{" "}
+                      <span>*</span>
+                    </label>
+
+
+                    <div className="interview-type-options">
+
+                      {/* ONLINE */}
+
+                      <label
+                        className={`type-option ${
+                          form.interviewType ===
+                          "Online"
+                            ? "active"
+                            : ""
+                        }`}
+                      >
+
+                        <input
+                          type="radio"
+                          name="interviewType"
+                          value="Online"
+                          checked={
+                            form.interviewType ===
+                            "Online"
+                          }
+                          onChange={
+                            handleChange
+                          }
+                        />
+
+                        <div className="type-icon">
+                          💻
+                        </div>
+
+                        <div>
+
+                          <strong>
+                            Online Interview
+                          </strong>
+
+                          <span>
+                            Video call / virtual meeting
+                          </span>
+
+                        </div>
+
+                      </label>
+
+
+                      {/* OFFLINE */}
+
+                      <label
+                        className={`type-option ${
+                          form.interviewType ===
+                          "Offline"
+                            ? "active"
+                            : ""
+                        }`}
+                      >
+
+                        <input
+                          type="radio"
+                          name="interviewType"
+                          value="Offline"
+                          checked={
+                            form.interviewType ===
+                            "Offline"
+                          }
+                          onChange={
+                            handleChange
+                          }
+                        />
+
+                        <div className="type-icon">
+                          🏢
+                        </div>
+
+                        <div>
+
+                          <strong>
+                            Offline Interview
+                          </strong>
+
+                          <span>
+                            Face-to-face interview
+                          </span>
+
+                        </div>
+
+                      </label>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* MEETING LINK */}
+
+                  {form.interviewType ===
+                    "Online" && (
+
+                    <div className="form-group full-width">
+
+                      <label>
+
+                        Meeting Link
+
+                        <span className="optional">
+                          Optional
+                        </span>
+
+                      </label>
+
+                      <div className="input-wrapper">
+
+                        <span className="input-icon">
+                          🔗
+                        </span>
+
+                        <input
+                          type="url"
+                          name="meetingLink"
+                          placeholder="https://meet.google.com/..."
+                          value={
+                            form.meetingLink
+                          }
+                          onChange={
+                            handleChange
+                          }
+                        />
+
+                      </div>
+
+                      <small className="field-hint">
+                        Add the meeting link for the candidate to join.
+                      </small>
+
+                    </div>
+
+                  )}
+
+                </div>
+
+              </div>
+
+
+              {/* =================================================
+                  MODAL FOOTER
+              ================================================= */}
+
+              <div className="modal-footer">
 
                 <button
                   type="button"
                   className="cancel-btn"
-                  onClick={closeModal}
+                  onClick={
+                    closeModal
+                  }
                 >
                   Cancel
                 </button>
 
+
                 <button
                   type="submit"
-                  className="save-btn"
+                  className="save-interview-btn"
                 >
-                  {editingId
+
+                  <span>
+                    {editingInterview
+                      ? "✓"
+                      : "＋"}
+                  </span>
+
+                  {editingInterview
                     ? "Update Interview"
                     : "Schedule Interview"}
+
                 </button>
 
               </div>

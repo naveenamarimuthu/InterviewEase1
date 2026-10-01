@@ -2,212 +2,437 @@
 // INTERVIEWEASE BACKEND SERVER
 // =====================================================
 
-// IMPORTANT:
-// DNS fix for MongoDB Atlas mongodb+srv connection
+// =====================================================
+// MONGODB ATLAS DNS FIX
+// =====================================================
+
 const dns = require("dns");
 
-// Use Google + Cloudflare DNS
 dns.setServers([
-    "8.8.8.8",
-    "1.1.1.1"
+  "8.8.8.8",
+  "1.1.1.1"
 ]);
 
+// =====================================================
+// ENVIRONMENT VARIABLES
+// =====================================================
+
 require("dotenv").config();
+
+// =====================================================
+// IMPORTS
+// =====================================================
 
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const bcrypt = require("bcryptjs");
+
+// =====================================================
+// MODELS
+// =====================================================
+
+const User = require("./models/User");
+
+// =====================================================
+// ROUTES
+// =====================================================
+
+const authRoutes =
+  require("./routes/authRoutes");
+
+const interviewRoutes =
+  require("./routes/interviewRoutes");
+
+// =====================================================
+// AUTH MIDDLEWARE
+// =====================================================
+
+const authMiddleware =
+  require("./middleware/authMiddleware");
+
+// =====================================================
+// APP
+// =====================================================
 
 const app = express();
-
 
 // =====================================================
 // CONFIGURATION
 // =====================================================
 
-const PORT = process.env.PORT || 5000;
+const PORT =
+  process.env.PORT || 5000;
 
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_URI =
+  process.env.MONGODB_URI;
 
+const JWT_SECRET =
+  process.env.JWT_SECRET;
+
+const ADMIN_EMAIL =
+  process.env.ADMIN_EMAIL;
+
+const ADMIN_PASSWORD =
+  process.env.ADMIN_PASSWORD;
 
 // =====================================================
-// CHECK ENV
+// STARTUP MESSAGE
 // =====================================================
 
-console.log("======================================");
-console.log("InterviewEase Backend Starting...");
-console.log("======================================");
+console.log(
+  "======================================"
+);
+
+console.log(
+  "🚀 InterviewEase Backend Starting..."
+);
+
+console.log(
+  "======================================"
+);
+
+// =====================================================
+// ENV CHECK
+// =====================================================
 
 if (!MONGODB_URI) {
+  console.error(
+    "❌ MONGODB_URI is missing in .env"
+  );
 
-    console.error("❌ MONGODB_URI is missing in .env");
-    process.exit(1);
-
+  process.exit(1);
 }
 
-console.log("✅ MONGODB_URI loaded");
+if (!JWT_SECRET) {
+  console.error(
+    "❌ JWT_SECRET is missing in .env"
+  );
 
+  process.exit(1);
+}
+
+if (!ADMIN_EMAIL) {
+  console.error(
+    "❌ ADMIN_EMAIL is missing in .env"
+  );
+
+  process.exit(1);
+}
+
+if (!ADMIN_PASSWORD) {
+  console.error(
+    "❌ ADMIN_PASSWORD is missing in .env"
+  );
+
+  process.exit(1);
+}
+
+console.log(
+  "✅ Environment variables loaded"
+);
 
 // =====================================================
 // MIDDLEWARE
 // =====================================================
 
-app.use(cors());
+app.use(
+  cors()
+);
 
-app.use(express.json());
+app.use(
+  express.json()
+);
 
-app.use(express.urlencoded({
+app.use(
+  express.urlencoded({
     extended: true
-}));
-
+  })
+);
 
 // =====================================================
-// BASIC TEST ROUTE
+// HEALTH CHECK
 // =====================================================
 
-app.get("/", (req, res) => {
-
+app.get(
+  "/",
+  (req, res) => {
     res.json({
-        success: true,
-        message: "InterviewEase Backend is running"
+      success: true,
+      message:
+        "InterviewEase Backend is running"
     });
-
-});
-
+  }
+);
 
 // =====================================================
-// API TEST ROUTE
+// API TEST
 // =====================================================
 
-app.get("/api", (req, res) => {
-
+app.get(
+  "/api",
+  (req, res) => {
     res.json({
-        success: true,
-        message: "InterviewEase API is working"
+      success: true,
+      message:
+        "InterviewEase API is working"
     });
+  }
+);
 
-});
+// =====================================================
+// AUTH ROUTES
+// =====================================================
 
+app.use(
+  "/api/auth",
+  authRoutes
+);
 
 // =====================================================
 // INTERVIEW ROUTES
 // =====================================================
-
-const interviewRoutes = require("./routes/interviewRoutes");
+//
+// Authentication required for all
+// interview operations.
+//
+// GET
+// POST
+// PUT
+// DELETE
+//
+// =====================================================
 
 app.use(
-    "/api/interviews",
-    interviewRoutes
+  "/api/interviews",
+  authMiddleware,
+  interviewRoutes
 );
-
 
 // =====================================================
 // 404 HANDLER
 // =====================================================
 
-app.use((req, res) => {
-
+app.use(
+  (req, res) => {
     res.status(404).json({
-        success: false,
-        message: `Route not found: ${req.method} ${req.originalUrl}`
+      success: false,
+      message:
+        `Route not found: ${req.method} ${req.originalUrl}`
     });
-
-});
-
+  }
+);
 
 // =====================================================
 // ERROR HANDLER
 // =====================================================
 
-app.use((err, req, res, next) => {
-
-    console.error("SERVER ERROR:", err);
+app.use(
+  (
+    err,
+    req,
+    res,
+    next
+  ) => {
+    console.error(
+      "SERVER ERROR:",
+      err
+    );
 
     res.status(500).json({
-        success: false,
-        message: err.message || "Internal server error"
+      success: false,
+      message:
+        err.message ||
+        "Internal server error"
     });
-
-});
-
+  }
+);
 
 // =====================================================
-// MONGODB CONNECTION
+// CREATE DEFAULT ADMIN
+// =====================================================
+
+async function createDefaultAdmin() {
+  try {
+    const email =
+      ADMIN_EMAIL
+        .toLowerCase()
+        .trim();
+
+    // Check existing user
+    const existingUser =
+      await User.findOne({
+        email
+      });
+
+    // User already exists
+    if (existingUser) {
+      console.log(
+        "✅ Admin user already exists"
+      );
+
+      console.log(
+        "Admin email:",
+        email
+      );
+
+      return;
+    }
+
+    // Hash password
+    const hashedPassword =
+      await bcrypt.hash(
+        ADMIN_PASSWORD,
+        10
+      );
+
+    // Create admin
+    const admin =
+      new User({
+        name:
+          "InterviewEase Admin",
+
+        email,
+
+        password:
+          hashedPassword
+      });
+
+    await admin.save();
+
+    console.log(
+      "======================================"
+    );
+
+    console.log(
+      "✅ Default admin user created"
+    );
+
+    console.log(
+      "Admin email:",
+      email
+    );
+
+    console.log(
+      "======================================"
+    );
+
+  } catch (error) {
+    console.error(
+      "❌ Admin creation failed:"
+    );
+
+    console.error(
+      error.message
+    );
+
+    throw error;
+  }
+}
+
+// =====================================================
+// CONNECT MONGODB
 // =====================================================
 
 async function connectMongoDB() {
+  try {
+    console.log(
+      "Connecting to MongoDB..."
+    );
 
-    try {
+    await mongoose.connect(
+      MONGODB_URI,
+      {
+        serverSelectionTimeoutMS:
+          10000,
 
-        console.log("Connecting to MongoDB...");
+        connectTimeoutMS:
+          10000,
 
-        await mongoose.connect(MONGODB_URI, {
+        socketTimeoutMS:
+          45000
+      }
+    );
 
-            serverSelectionTimeoutMS: 10000,
+    console.log(
+      "✅ MongoDB Connected Successfully!"
+    );
 
-            connectTimeoutMS: 10000,
+    console.log(
+      "Database:",
+      mongoose.connection.name
+    );
 
-            socketTimeoutMS: 45000
+    // Create admin if not exists
+    await createDefaultAdmin();
 
-        });
-        console.log("MongoDB READY STATE:", mongoose.connection.readyState);
-console.log("MongoDB HOST:", mongoose.connection.host);
-console.log("MongoDB DB:", mongoose.connection.name);
+  } catch (error) {
+    console.error(
+      "❌ MongoDB Connection Failed:"
+    );
 
-        console.log("✅ MongoDB Connected Successfully!");
+    console.error(
+      error.message
+    );
 
-        console.log(
-            "Database:",
-            mongoose.connection.name
-        );
-
-    } catch (error) {
-
-        console.error(
-            "❌ MongoDB Connection Failed:"
-        );
-
-        console.error(error.message);
-
-        process.exit(1);
-
-    }
-
+    process.exit(1);
+  }
 }
-
 
 // =====================================================
 // START SERVER
 // =====================================================
 
 async function startServer() {
+  await connectMongoDB();
 
-    await connectMongoDB();
+  app.listen(
+    PORT,
+    () => {
 
-    app.listen(PORT, () => {
+      console.log("");
 
-        console.log("");
-        console.log("======================================");
-        console.log("🚀 InterviewEase Backend Started");
-        console.log("======================================");
-        console.log(
-            `🌐 Server: http://localhost:${PORT}`
-        );
-        console.log(
-            `📋 API: http://localhost:${PORT}/api/interviews`
-        );
-        console.log(
-            `❤️ Health: http://localhost:${PORT}/`
-        );
-        console.log("======================================");
+      console.log(
+        "======================================"
+      );
 
-    });
+      console.log(
+        "🚀 InterviewEase Backend Started"
+      );
 
+      console.log(
+        "======================================"
+      );
+
+      console.log(
+        `🌐 Server: http://localhost:${PORT}`
+      );
+
+      console.log(
+        `🔐 Login: http://localhost:${PORT}/api/auth/login`
+      );
+
+      console.log(
+        `👤 Auth Check: http://localhost:${PORT}/api/auth/me`
+      );
+
+      console.log(
+        `📋 API: http://localhost:${PORT}/api/interviews`
+      );
+
+      console.log(
+        `❤️ Health: http://localhost:${PORT}/`
+      );
+
+      console.log(
+        "======================================"
+      );
+    }
+  );
 }
 
-
 // =====================================================
-// START
+// START APPLICATION
 // =====================================================
 
 startServer();
